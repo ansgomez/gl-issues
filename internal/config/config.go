@@ -324,8 +324,8 @@ func interval(d time.Duration) string {
 var ErrNoConfigDir = errors.New("no config directory: HOME is not set and XDG_CONFIG_HOME is not an absolute path; " +
 	"pass -config or set GL_ISSUES_CONFIG")
 
-// Name is the directory name under the config (and state) base
-// directory.
+// Name is the config directory name; EnvPrefix starts the environment
+// overrides (GL_ISSUES_<SETTING>).
 const (
 	Name      = "gl-issues"
 	EnvPrefix = "GL_ISSUES_"
@@ -460,7 +460,7 @@ func parse(r io.Reader) (keyValues, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "[") {
-			return kv, fmt.Errorf("line %d: sections like %s are not supported; put every setting at the top level", n, line)
+			return kv, fmt.Errorf("line %d: sections ([…]) are not supported; put every setting at the top level", n)
 		}
 		k, v, ok := strings.Cut(line, "=")
 		if !ok {
@@ -468,7 +468,7 @@ func parse(r io.Reader) (keyValues, error) {
 		}
 		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
 		if !validKey(k) {
-			return kv, fmt.Errorf("line %d: bad setting name %q", n, k)
+			return kv, fmt.Errorf("line %d: bad setting name", n)
 		}
 		k = strings.ToLower(k)
 		if lookup(k) == nil { // before the value, so its text is never in the error
@@ -517,7 +517,7 @@ func parseValue(v string) (string, error) {
 		}
 		s, err := strconv.Unquote(v[:end+1])
 		if err != nil {
-			return "", fmt.Errorf("bad escape in string %s (use 'single quotes' for backslashes)", strconv.Quote(v[:end+1]))
+			return "", errors.New("bad escape in string (use 'single quotes' for backslashes)")
 		}
 		val, rest = s, v[end+1:]
 	case strings.HasPrefix(v, "'"): // literal string: no escapes
@@ -536,11 +536,11 @@ func parseValue(v string) (string, error) {
 			rest = "#" + rest
 		}
 		if strings.ContainsAny(val, "\"'") || strings.ContainsAny(val, " \t") {
-			return "", fmt.Errorf("bad value %s (quote text: \"…\")", strconv.Quote(val))
+			return "", errors.New("bad value (quote text: \"…\")")
 		}
 	}
 	if rest = strings.TrimSpace(rest); rest != "" && !strings.HasPrefix(rest, "#") {
-		return "", fmt.Errorf("unexpected %s after the value", strconv.Quote(rest))
+		return "", errors.New("unexpected text after the value")
 	}
 	return val, nil
 }

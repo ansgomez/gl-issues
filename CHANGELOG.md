@@ -12,6 +12,12 @@ project uses [Semantic Versioning](https://semver.org/).
   versions. A `token` line in the config file is now reported as an
   unknown setting (without its value).
 
+### Security
+
+- Config parse errors no longer quote the config text: a malformed value
+  holding a credential (such as a group URL with a password) is never
+  shown in an error or by `doctor`.
+
 ## [0.1.0] - 2026-11-01
 
 First public release.

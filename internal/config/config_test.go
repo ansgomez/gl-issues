@@ -364,6 +364,30 @@ func TestUnknownKeyHidesValue(t *testing.T) {
 	}
 }
 
+// A parse error never quotes the config text, so a malformed line holding
+// a credential (a mistyped token, a group URL with a password) never shows
+// it.
+func TestParseErrorsHideText(t *testing.T) {
+	for _, line := range []string{
+		`Token = "glpat-SECRETabc"`,
+		`token = "glpat-SECRETabc`,
+		`group = "https://oauth2:glpat-SECRET@gitlab.example.edu/acme\q"`,
+		`group = https://oauth2:glpat-SECRET@gitlab.example.edu/acme x`,
+		`browser = "x" glpat-SECRET`,
+		`[glpat-SECRET]`,
+		`token glpat-SECRET = x`,
+	} {
+		p := filepath.Join(t.TempDir(), "c.toml")
+		if err := os.WriteFile(p, []byte("host = \"gitlab.example.edu\"\n"+line+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := Load(p)
+		if err == nil || strings.Contains(err.Error(), "SECRET") || !strings.Contains(err.Error(), "line 2: ") {
+			t.Errorf("%q: %v", line, err)
+		}
+	}
+}
+
 // GL_ISSUES_CONFIG names the config file unless -config is given.
 func TestConfigEnv(t *testing.T) {
 	dir := t.TempDir()

@@ -167,7 +167,8 @@ small subset of TOML: one `key = value` per line, where the value is a
 comments. A misspelt setting, an invalid value, a setting given twice,
 a `[section]` or text after a value stops gl-issues with a message that
 names the problem and its line, so typos are never silently ignored. The
-value of an unknown setting is never part of the message.
+message never quotes the config text, so a mistyped secret is never
+shown.
 
 **Where values come from**, later ones winning:
 
