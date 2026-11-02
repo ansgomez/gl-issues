@@ -15,7 +15,6 @@ them.
 ```sh
 gl-issues init                         # create the config file from the template
 gl-issues doctor                       # check config, glab, login, token storage, group, token scopes
-gl-issues migrate-token                # hand a token left in the config file to glab's login
 gl-issues list                         # open issues in the group, as a table
 gl-issues list -mine -overdue
 gl-issues list -state closed

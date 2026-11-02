@@ -1,7 +1,7 @@
 # Configuring gl-issues
 
-This page covers the config file, logging glab in, every setting, the
-upgrade from gitissue and the background refresh. Back to the
+This page covers the config file, logging glab in, every setting and
+the background refresh. Back to the
 [README](../README.md).
 
 gl-issues needs two settings, `host` and `group`, and glab logged in to
@@ -27,9 +27,7 @@ It prints the file it created. The template ships with `host` and
 them until you set them.
 
 Edit the config file with gl-issues closed. The dashboard reads it once,
-at start, so changes apply the next time it starts. `gl-issues
-migrate-token` rewrites it, and an editor saving at that moment could
-lose its edit.
+at start, so changes apply the next time it starts.
 
 The file is `$XDG_CONFIG_HOME/gl-issues/config.toml` if `XDG_CONFIG_HOME`
 is set to an absolute path (on macOS too), else
@@ -79,28 +77,6 @@ on Linux, the Keychain on macOS) unless it is told `--insecure-storage`,
 or no keyring is available; then it is kept in plain text in glab's
 config file. `gl-issues doctor` says which one glab uses for your host.
 
-**Upgrading from a config with a `token`:** older versions read a
-`token` from the config file (or `GL_ISSUES_TOKEN`) and passed it to
-glab. That setting is gone. A `token` line left in the file no longer
-stops gl-issues: it is ignored, with a one-line warning on stderr that
-points at
-
-```sh
-gl-issues migrate-token
-```
-
-which hands the file's token to glab (`glab auth login --hostname <host>
---stdin`, the token on glab's standard input, never on a command line)
-and, only once glab has accepted it, rewrites the config file without the
-token line (atomically, keeping mode 600 and every other line). If glab
-fails, the file is left unchanged. If the file is edited while glab logs
-in, it is not rewritten (you are told to delete the token line yourself).
-Two `migrate-token` runs never overlap: the second one stops and changes
-nothing. Edit the config file with gl-issues closed: an editor does not
-take that lock, so a save landing in the very instant of the rewrite
-could still be lost. `GL_ISSUES_TOKEN` and `GITISSUE_TOKEN`
-are no longer read; gl-issues warns while one is set.
-
 The token is a personal access token, created at
 `https://<host>/-/user_settings/personal_access_tokens`. If your GitLab
 offers a choice between fine-grained and legacy tokens, pick the legacy
@@ -135,19 +111,17 @@ role in the project must also allow the change; otherwise GitLab answers
 
 ## Keeping the token safe
 
-- The config holds no secrets, but lives in `~/.config/gl-issues/`,
-  outside any repository, since an old one may still hold a token.
+- The config holds no secrets and lives in `~/.config/gl-issues/`,
+  outside any repository.
 - `config.toml`, `*.local.toml`, `.env*` and `*.token` are in `.gitignore`,
   so a copy inside this folder is not committed either. Only
   `config.example.toml`, which holds no secrets, is tracked.
 - gl-issues refuses to start if the config file can be read by other users
   (`chmod 600` fixes it).
 - gl-issues never stores or passes a token: glab uses its own login,
-  kept in the OS keyring by glab 1.123+. The one exception is
-  `gl-issues migrate-token`, which hands an old config token to glab
-  once, on glab's standard input. `gl-issues doctor` warns when glab keeps
-  it in plain text in its config file (fix: with glab 1.123+ and an
-  unlocked keyring, log in again,
+  kept in the OS keyring by glab 1.123+. `gl-issues doctor` warns when
+  glab keeps it in plain text in its config file (fix: with glab 1.123+
+  and an unlocked keyring, log in again,
   `glab auth login --hostname <host>`) and when glab makes API calls over
   `http` instead of `https`.
 - gl-issues removes `GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN`, `OAUTH_TOKEN`
@@ -193,9 +167,7 @@ small subset of TOML: one `key = value` per line, where the value is a
 comments. A misspelt setting, an invalid value, a setting given twice,
 a `[section]` or text after a value stops gl-issues with a message that
 names the problem and its line, so typos are never silently ignored. The
-one exception is an old `token` line, ignored with a warning (see
-[Log in](#log-in-and-token-scopes)); its value is never part of any
-message.
+value of an unknown setting is never part of the message.
 
 **Where values come from**, later ones winning:
 
@@ -224,36 +196,8 @@ it, gl-issues says to move them):
 
 `gl-issues config` prints every setting, its value and where it came
 from (`file` for the config file named above the table, `env …`,
-`flag …` or `default`), and warns about a `token` line left in the
-file (never its value). A value that does not validate names its source: the file,
-`GL_ISSUES_…` or `flag -…`. A value taken from a deprecated variable
-shows its old name (`env GITISSUE_GROUP`).
-
-## Upgrading from gitissue
-
-gl-issues was called gitissue. For one release it picks up what the old
-name left behind:
-
-- On the first run (of anything but `gl-issues doctor`, which is
-  read-only and only reports them), `~/.config/gitissue` (or
-  `$XDG_CONFIG_HOME/gitissue`) is moved to `~/.config/gl-issues`, and
-  `~/.local/state/gitissue` (or `$XDG_STATE_HOME/gitissue`) to
-  `~/.local/state/gl-issues`, with one line on stderr each:
-  `gl-issues: moved your settings from <old> to <new> (gitissue was
-  renamed)`. The move keeps the file modes. It happens only when the new
-  directory does not exist yet; the config directory is moved only when
-  no `-config`, `$GL_ISSUES_CONFIG` or `$GITISSUE_CONFIG` is given. A
-  symlinked old directory is not moved (only reported). If both exist,
-  the new one is used and a line says the old one is ignored; remove it
-  when you no longer need it.
-- `GITISSUE_<SETTING>` and `GITISSUE_CONFIG` still work while the
-  matching `GL_ISSUES_…` variable is not set, with a warning on stderr:
-  `GITISSUE_VIEW is deprecated: use GL_ISSUES_VIEW`. If both are set,
-  the new one wins. Rename them in your shell profile and scripts; the old
-  names will stop working in a later release.
-- `gl-issues doctor` lists deprecated variables still set and old
-  directories still there. Scripts that call `gitissue` need the new
-  command name.
+`flag …` or `default`). A value that does not validate names its
+source: the file, `GL_ISSUES_…` or `flag -…`.
 
 ## Background refresh
 

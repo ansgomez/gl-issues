@@ -57,11 +57,6 @@ cd gl-issues && make install    # into $(go env GOPATH)/bin, usually ~/go/bin; a
 | Recently used projects (no secrets) | `~/.local/state/gl-issues/state.json`, or `$XDG_STATE_HOME/gl-issues/` |
 | Temporary files while editing | `~/.cache/gl-issues/` (or `$XDG_CACHE_HOME/gl-issues/` if that is an absolute path), mode 700, deleted after saving |
 
-gl-issues used to be called gitissue: on the first run it moves
-`~/.config/gitissue` and `~/.local/state/gitissue` (or their
-`$XDG_…` counterparts) to the new places above and says so; see
-[Upgrading from gitissue](configuration.md#upgrading-from-gitissue).
-
 Create the config the same way as on macOS:
 
 ```sh

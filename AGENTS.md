@@ -15,26 +15,15 @@ Guidelines for agents working on gl-issues.
   before the config must be valid. `doctor.go` — read-only setup check
   behind the `doctorClient` interface (tests use a fake; `gl.Client` is
   the real one, calls in `internal/gl/setup.go`).
-- `migrate.go` — one release of compatibility with the old name
-  gitissue: moves the old default config/state directories once
-  (`migrateLegacy`, never a symlink, never with an explicit config, never
-  for doctor: `migrateLegacyFor`), and `renameNotes` for doctor. Also
-  `migrate-token` (`migrateToken`): hands a `token` line left in the
-  config file to `glab auth login --stdin` (`gl.Client.Login`), then
-  rewrites the file without it (`replaceFile`, atomic, under an advisory
-  flock on the config directory, `lock_unix.go`, so two runs never
-  overlap); stays longer than the rename parts. The deprecated `GITISSUE_<KEY>` variables are
-  read by `lookupEnv` in internal/config (`DeprecatedEnv` warns). Drop
-  all of it in the release after next. Tests in the main and config
-  packages sandbox HOME/XDG and clear both prefixes in `TestMain`.
 - `internal/config` — reads `~/.config/gl-issues/config.toml` (flat
   `key = value` subset of TOML, no dependency; anything else is an
-  error), refuses group/world-readable files. It holds no token: an old
-  `token` line is skipped (`Config.FileToken`, warned about; value never
-  kept), `StripToken` removes it for migrate-token. Every setting is one entry
-  in the `settings` table (default, validation, help); env
-  `GL_ISSUES_<KEY>` (old `GITISSUE_<KEY>` as a fallback) and flags go
-  through `Config.Set`, which records the source for `gl-issues config`.
+  error), refuses group/world-readable files. It holds no token; an
+  unknown key such as `token` is an error that never shows the value.
+  Every setting is one entry in the `settings` table (default,
+  validation, help); env `GL_ISSUES_<KEY>` and flags go through
+  `Config.Set`, which records the source for `gl-issues config`. Tests in
+  the main and config packages sandbox HOME/XDG and clear the
+  `GL_ISSUES_` variables in `TestMain`.
 - `internal/gl` — GitLab REST calls through `glab api` (`Client.API`;
   stdout and stderr each capped at `MaxOutput`, past which glab is
   killed); issue/note/user types; `ParseRef`. `project.go`: project listing and `RankProjects`.
@@ -80,8 +69,8 @@ Guidelines for agents working on gl-issues.
 - `README.md` — the short overview (pitch, quick start, install,
   minimal config, docs index). The details live in `docs/`:
   `install.md` (install, release verification), `configuration.md`
-  (config file, login and token scopes, settings, upgrade from
-  gitissue, background refresh), `dashboard.md` (keys, tree layout,
+  (config file, login and token scopes, settings, background refresh),
+  `dashboard.md` (keys, tree layout,
   pop-ups, assignees, new issues, update tags), `scripting.md`
   (subcommands), `troubleshooting.md` and `linux.md`. Keep them in step
   with behaviour changes; new docs files also go in
@@ -101,9 +90,7 @@ Guidelines for agents working on gl-issues.
 - Secrets: gl-issues holds no token; glab uses its own stored login (OS
   keyring by default). Inherited token, host-override and debug variables
   are dropped from glab's environment (`glabEnv`) and no token is ever
-  added. The only token gl-issues touches is an old config `token` in
-  `migrate-token`: on glab's stdin only, never an argument, environment,
-  log or output. doctor reads only the storage and protocol from
+  added. doctor reads only the storage and protocol from
   `glab auth status` (`gl.AuthStatus`), never prints its output. Never commit `config.toml`, `.env*` or
   tokens; only `config.example.toml` (no secrets) is tracked.
 - Writes to GitLab happen only on an explicit keypress or subcommand.

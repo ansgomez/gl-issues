@@ -63,11 +63,11 @@ func TestEditDir(t *testing.T) {
 // the environment (only glab may see a token), but with the rest of it.
 func TestChildEnvWithoutTokens(t *testing.T) {
 	t.Setenv("GITLAB_TOKEN", "secret")
-	t.Setenv("GL_ISSUES_TOKEN", "secret")
+	t.Setenv("OAUTH_TOKEN", "secret")
 	check := func(what string, env []string) {
 		t.Helper()
 		all := "\n" + strings.Join(env, "\n") + "\n"
-		for _, k := range []string{"GITLAB_TOKEN", "GL_ISSUES_TOKEN"} {
+		for _, k := range []string{"GITLAB_TOKEN", "OAUTH_TOKEN"} {
 			if strings.Contains(all, "\n"+k+"=") {
 				t.Errorf("%s gets %s", what, k)
 			}

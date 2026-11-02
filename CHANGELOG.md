@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Removed
+
+- Migration code and the `migrate-token` subcommand for pre-release
+  versions. A `token` line in the config file is now reported as an
+  unknown setting (without its value).
+
 ## [0.1.0] - 2026-11-01
 
 First public release.
@@ -43,4 +51,5 @@ First public release.
 - Release builds for Linux and macOS (amd64, arm64), `.deb` and `.rpm`
   packages, SBOMs and keyless-signed checksums.
 
+[Unreleased]: https://github.com/ansgomez/gl-issues/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/ansgomez/gl-issues/releases/tag/v0.1.0

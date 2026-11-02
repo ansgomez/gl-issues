@@ -15,6 +15,27 @@ import (
 	"gl-issues/internal/tui"
 )
 
+// TestMain keeps every test in this package away from the real config
+// and state directories and from the environment's GL_ISSUES_… variables.
+func TestMain(m *testing.M) {
+	home, err := os.MkdirTemp("", "gl-issues-test-home-")
+	if err != nil {
+		panic(err)
+	}
+	os.Setenv("HOME", home)
+	os.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	os.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state"))
+	for _, kv := range os.Environ() {
+		name, _, _ := strings.Cut(kv, "=")
+		if strings.HasPrefix(name, config.EnvPrefix) {
+			os.Unsetenv(name)
+		}
+	}
+	code := m.Run()
+	os.RemoveAll(home)
+	os.Exit(code)
+}
+
 var projects = []gl.Project{
 	{Name: "weather-station", Path: "acme/platform/weather/weather-station"},
 	{Name: "notes", Path: "acme/people/alice/notes"},
@@ -333,7 +354,7 @@ func TestGlobalFlagAfterCommand(t *testing.T) {
 // in the FROM column.
 func TestPrintConfig(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "config.toml")
-	os.WriteFile(p, []byte("host = \"gitlab.example.edu\"\ntoken = \"glpat-x\"\n"), 0o600)
+	os.WriteFile(p, []byte("host = \"gitlab.example.edu\"\n"), 0o600)
 	t.Setenv("GL_ISSUES_VIEW", "compact")
 	t.Setenv("GL_ISSUES_EDITOR", "vim\x1b[31m\n--trick") // an escape sequence and a newline in a value
 	cfg, err := config.Load(p)
@@ -347,13 +368,10 @@ func TestPrintConfig(t *testing.T) {
 		t.Errorf("the path should appear once, in the header:\n%s", got)
 	}
 	for _, re := range []string{`(?m)^host +gitlab\.example\.edu +file `, `(?m)^view +compact +env GL_ISSUES_VIEW `,
-		`(?m)^sort +due +default `, `(?m)^Warning: the token in the config file is ignored .* gl-issues migrate-token$`} {
+		`(?m)^sort +due +default `} {
 		if !regexp.MustCompile(re).MatchString(got) {
 			t.Errorf("no line matching %s:\n%s", re, got)
 		}
-	}
-	if strings.Contains(got, "glpat") || regexp.MustCompile(`(?m)^token `).MatchString(got) {
-		t.Error("token printed")
 	}
 	if strings.Contains(got, "\x1b") || !regexp.MustCompile(`(?m)^editor +vim --trick +env GL_ISSUES_EDITOR `).MatchString(got) {
 		t.Errorf("a value reached the terminal unsanitized:\n%s", got)

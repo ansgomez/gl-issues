@@ -138,13 +138,6 @@ func TestDoctor(t *testing.T) {
 			[]string{"✓ config: /x/config.toml", "✓ glab: glab 1.50.0", "✓ logged in to gitlab.example.edu as @alice\n",
 				"✓ glab keeps the token for gitlab.example.edu in the OS keyring",
 				"✓ group acme/platform is visible, you are developer", "✓ token scopes: api"}},
-		{"token left in config", func(_ *fakeDoctor, c *config.Config) { c.FileToken = true }, true,
-			[]string{"! config: the token in /x/config.toml is ignored (gl-issues uses glab's login)",
-				"→ hand it to glab and remove it from the file: gl-issues migrate-token"}},
-		{"token left in config, not logged in", func(f *fakeDoctor, c *config.Config) {
-			c.FileToken = true
-			f.meErr = &gl.APIError{Reason: "401 Unauthorized", Request: "GET user", Unauthorized: true}
-		}, false, []string{"→ run gl-issues migrate-token (hands the token in /x/config.toml to glab), or glab auth login --hostname gitlab.example.edu\n"}},
 		{"plaintext token", func(f *fakeDoctor, _ *config.Config) { f.auth.Storage = gl.StoragePlaintext }, true,
 			[]string{"! glab keeps the token for gitlab.example.edu in its config file, in plain text",
 				"→ with glab 1.123+ and an unlocked OS keyring, log in again to move it there: glab auth login --hostname gitlab.example.edu\n"}},
@@ -188,7 +181,7 @@ func TestDoctor(t *testing.T) {
 		f, cfg := goodDoctor(), doctorCfg()
 		tc.change(f, &cfg)
 		var out bytes.Buffer
-		ok := runDoctor(&out, f, cfg, "/x/config.toml", nil, nil)
+		ok := runDoctor(&out, f, cfg, "/x/config.toml", nil)
 		if ok != tc.ok {
 			t.Errorf("%s: ok = %v, want %v\n%s", tc.name, ok, tc.ok, out.String())
 		}
@@ -303,7 +296,7 @@ func TestDoctorConfigError(t *testing.T) {
 	}
 	f := goodDoctor()
 	var out bytes.Buffer
-	if runDoctor(&out, f, cfg, cfgFile, err, nil) {
+	if runDoctor(&out, f, cfg, cfgFile, err) {
 		t.Error("doctor passed")
 	}
 	got := out.String()
@@ -334,7 +327,7 @@ func TestDoctorAfterInit(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if runDoctor(&out, goodDoctor(), cfg, path, nil, nil) {
+	if runDoctor(&out, goodDoctor(), cfg, path, nil) {
 		t.Errorf("doctor passed an unedited template:\n%s", out.String())
 	}
 	for _, w := range []string{"✗ host: not set", "✗ group: not set", "→ set host in " + path} {
@@ -410,29 +403,20 @@ func TestDoctorCLIHostWithPort(t *testing.T) {
 	}
 }
 
-// A config with a malformed token line still loads (the line is
-// ignored); doctor points at migrate-token, never shows the token's text,
-// and migrate-token reports the line without it, leaving the file as is.
+// A token line is an unknown setting: the config does not load, and
+// neither the error nor doctor's report shows the value.
 func TestDoctorNeverShowsToken(t *testing.T) {
 	cfgFile := filepath.Join(t.TempDir(), "config.toml")
-	body := "host = \"gitlab.example.edu\"\ntoken = glpat-SECRETabc oops\ngroup = \"acme\"\n"
+	body := "host = \"gitlab.example.edu\"\ntoken = \"glpat-SECRETabc\"\ngroup = \"acme\"\n"
 	os.WriteFile(cfgFile, []byte(body), 0o600)
 	cfg, err := loadConfig(cfgFile, nil)
-	if err != nil || cfg.Group != "acme" || !cfg.FileToken {
-		t.Fatalf("a bad token line must not stop loading: %v", err)
+	if err == nil || strings.Contains(err.Error(), "SECRET") || !strings.Contains(err.Error(), `line 2: unknown setting "token"`) {
+		t.Fatalf("want an unknown-setting error without the value, got %v", err)
 	}
 	var out bytes.Buffer
-	runDoctor(&out, goodDoctor(), cfg, cfgFile, err, nil)
-	if got := out.String(); strings.Contains(got, "SECRET") || !strings.Contains(got, "gl-issues migrate-token") {
+	runDoctor(&out, goodDoctor(), cfg, cfgFile, err)
+	if got := out.String(); strings.Contains(got, "SECRET") || !strings.Contains(got, `unknown setting "token"`) {
 		t.Errorf("doctor output:\n%s", got)
-	}
-	out.Reset()
-	err = setupCommand("migrate-token", nil, cfgFile, cfgFile, nil, &out)
-	if err == nil || strings.Contains(err.Error()+out.String(), "SECRET") || !strings.Contains(err.Error(), "line 2: token") {
-		t.Errorf("migrate-token: %v %q", err, out.String())
-	}
-	if b, _ := os.ReadFile(cfgFile); string(b) != body {
-		t.Error("file changed")
 	}
 }
 

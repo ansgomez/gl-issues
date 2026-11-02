@@ -92,31 +92,18 @@ func newClient(cfg config.Config) gl.Client {
 	return gl.Client{Host: cfg.Host}
 }
 
-// tokenWarning is the one-line warning about a token line left in the
-// config file by older versions, or "" when there is none.
-func tokenWarning(cfg config.Config) string {
-	if !cfg.FileToken {
-		return ""
-	}
-	return "ignoring the token in " + cfg.Path + " (gl-issues uses glab's login now); " +
-		"move it to glab's login with: gl-issues migrate-token"
-}
-
 // errDoctorFound makes doctor exit 1 once it has printed its report.
 var errDoctorFound = errors.New("doctor found problems (✗ above)")
 
 // setupCommand runs init or doctor, which must work before the config is
-// complete or even valid, config, which shows it, or migrate-token. path
-// is the config file gl-issues uses.
+// complete or even valid, or config, which shows it. path is the config
+// file gl-issues uses.
 func setupCommand(name string, args []string, cfgPath, path string, flags map[string]string, out io.Writer) error {
 	if wantsHelp(name, args) {
 		fmt.Fprintln(out, map[string]string{
 			"init":   "Usage: gl-issues [-config file] init\nWrites the commented config template to " + path + " (never overwrites).",
 			"doctor": "Usage: gl-issues [flags] doctor\nChecks the config, glab, the login and where glab keeps the token, the group and the token scopes (read-only).",
 			"config": "Usage: gl-issues [flags] config\nShows every setting, its value and where it comes from (" + path + ", environment, flags).",
-			"migrate-token": "Usage: gl-issues [flags] migrate-token\nHands the token older versions kept in " + path + " to glab's login for the host\n" +
-				"(glab auth login --hostname <host> --stdin; glab 1.123+ keeps it in the OS keyring, doctor says where),\nthen removes the token line from the file. " +
-				"If glab fails, the file is left unchanged.",
 		}[name])
 		return nil
 	}
@@ -126,8 +113,6 @@ func setupCommand(name string, args []string, cfgPath, path string, flags map[st
 	switch name {
 	case "init":
 		return initConfig(path, out)
-	case "migrate-token":
-		return migrateToken(path, flags, out)
 	case "config":
 		cfg, err := loadConfig(cfgPath, flags)
 		if err != nil {
@@ -137,7 +122,7 @@ func setupCommand(name string, args []string, cfgPath, path string, flags map[st
 		return nil
 	}
 	cfg, err := loadConfig(cfgPath, flags)
-	if !runDoctor(out, newClient(cfg), cfg, path, err, renameNotes()) {
+	if !runDoctor(out, newClient(cfg), cfg, path, err) {
 		return errDoctorFound
 	}
 	return nil

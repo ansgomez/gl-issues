@@ -14,8 +14,6 @@ reopen issues. The same actions also work as plain subcommands for scripts.
 gl-issues talks to GitLab through [`glab`](https://gitlab.com/gitlab-org/cli)
 (`glab api`), so it uses glab's networking and always glab's login for
 the configured host.
-It used to be called gitissue; see [Upgrading from
-gitissue](docs/configuration.md#upgrading-from-gitissue).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.gif">
@@ -120,7 +118,7 @@ All settings, environment variables and flags are in
   downloads and how to verify them, building from source.
 - [Configuring gl-issues](docs/configuration.md): config file, log in
   and token scopes, keeping the token safe, all settings and flags,
-  upgrading from gitissue, background refresh.
+  background refresh.
 - [Using the dashboard](docs/dashboard.md): rows, keys, due dates, tree
   layout, pop-up windows, picking assignees, creating an issue, update
   tags.

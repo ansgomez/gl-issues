@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -101,14 +100,12 @@ func TestAPITokenEnv(t *testing.T) {
 	t.Setenv("GITLAB_ACCESS_TOKEN", "x")
 	t.Setenv("OAUTH_TOKEN", "x")
 	t.Setenv("CI_JOB_TOKEN", "x")
-	t.Setenv("GL_ISSUES_TOKEN", "x") // older gl-issues versions' token variables
-	t.Setenv("GITISSUE_TOKEN", "x")
 	envFile, _ := fakeGlab(t, `{"id":1,"username":"me"}`, "", 0)
 	if _, err := (Client{Host: "gitlab.example.edu"}).Me(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	env := readFile(t, envFile)
-	for _, v := range append(tokenVars, "GL_ISSUES_TOKEN", "GITISSUE_TOKEN") {
+	for _, v := range tokenVars {
 		if strings.Contains(env, v+"=") {
 			t.Errorf("%s must not reach glab", v)
 		}
@@ -273,7 +270,6 @@ func TestGlabEnvDropsHostAndDebugVars(t *testing.T) {
 	base := []string{
 		"PATH=/bin", "HOME=/home/alice",
 		"GITLAB_TOKEN=x", "GITLAB_ACCESS_TOKEN=x", "OAUTH_TOKEN=x", "CI_JOB_TOKEN=x",
-		"GL_ISSUES_TOKEN=x", "GITISSUE_TOKEN=x",
 		"GITLAB_HOST=evil.example", "GITLAB_URI=https://evil.example", "GITLAB_URL=https://evil.example",
 		"GL_HOST=evil.example", "GLAB_ENABLE_CI_AUTOLOGIN=true",
 		"GITLAB_API_HOST=evil.example", "GITLAB_API_PROTOCOL=http",
@@ -281,7 +277,7 @@ func TestGlabEnvDropsHostAndDebugVars(t *testing.T) {
 		"GLAB_SEND_TELEMETRY=true", "GLAB_SHOW_WHATS_NEW=true", "GLAB_CHECK_UPDATE=true",
 	}
 	env := strings.Join(glabEnv(base, "gitlab.example.edu"), "\n") + "\n"
-	for _, k := range []string{"GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN", "CI_JOB_TOKEN", "GL_ISSUES_TOKEN", "GITISSUE_TOKEN",
+	for _, k := range []string{"GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN", "CI_JOB_TOKEN",
 		"GITLAB_URI", "GITLAB_URL", "GL_HOST", "GITLAB_API_HOST", "GITLAB_API_PROTOCOL", "GLAB_ENABLE_CI_AUTOLOGIN", "GLAB_DEBUG", "GLAB_DEBUG_HTTP", "DEBUG"} {
 		if strings.Contains("\n"+env, "\n"+k+"=") {
 			t.Errorf("%s must not reach glab", k)
@@ -307,7 +303,7 @@ func TestGlabEnvDropsHostAndDebugVars(t *testing.T) {
 // variable, and nothing else changed.
 func TestWithoutTokens(t *testing.T) {
 	base := []string{"PATH=/bin", "GITLAB_TOKEN=x", "HOME=/home/alice", "GITLAB_ACCESS_TOKEN=x",
-		"OAUTH_TOKEN=x", "CI_JOB_TOKEN=x", "GL_ISSUES_TOKEN=x", "GITISSUE_TOKEN=x", "GITLAB_HOST=gitlab.example.edu"}
+		"OAUTH_TOKEN=x", "CI_JOB_TOKEN=x", "GITLAB_HOST=gitlab.example.edu"}
 	got := strings.Join(WithoutTokens(base), " ")
 	if want := "PATH=/bin HOME=/home/alice GITLAB_HOST=gitlab.example.edu"; got != want {
 		t.Errorf("WithoutTokens = %q, want %q", got, want)
@@ -526,57 +522,6 @@ func TestAuthStatus(t *testing.T) {
 	}
 }
 
-// Login passes the token on stdin only, and never shows it in an error.
-func TestLogin(t *testing.T) {
-	const secret = "glpat-SECRETvalue"
-	dir := t.TempDir()
-	stdin, args, env := filepath.Join(dir, "stdin"), filepath.Join(dir, "args"), filepath.Join(dir, "env")
-	script := "#!/bin/sh\ncat > '" + stdin + "'\nprintf '%s\\n' \"$@\" > '" + args + "'\nenv > '" + env + "'\n" +
-		"[ \"$WRAP\" = 1 ] && { t=$(cat '" + stdin + "'); w=${WRAPAT:-9}; echo \"error: bad token $(printf %s \"$t\" | cut -c1-$w)\" >&2; " +
-		"printf '%s\\n' \"$t\" | cut -c$((w+1))- >&2; exit 1; }\n" +
-		"[ \"$FAIL\" = 1 ] && { echo \"error: bad token $(cat '" + stdin + "')\" >&2; exit 1; }\nexit 0\n"
-	if err := os.WriteFile(filepath.Join(dir, "glab"), []byte(script), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("GITLAB_TOKEN", "inherited")
-	t.Setenv("GL_ISSUES_TOKEN", "inherited")
-	t.Setenv("GITISSUE_TOKEN", "inherited")
-	c := Client{Host: "gitlab.example.edu"}
-	if err := c.Login(context.Background(), secret); err != nil {
-		t.Fatal(err)
-	}
-	if got := readFile(t, stdin); got != secret+"\n" {
-		t.Errorf("stdin %q", got)
-	}
-	if got := readFile(t, args); got != "auth\nlogin\n--hostname\ngitlab.example.edu\n--stdin\n" {
-		t.Errorf("args %q", got)
-	}
-	if e := readFile(t, env); strings.Contains(e, secret) || strings.Contains(e, "inherited") {
-		t.Error("the token must reach glab on stdin only")
-	}
-	// A failed login never shows glab's output, which may echo the token
-	// in any shape: plain, sanitized, wrapped across lines, or short.
-	check := func(name, tok string) {
-		t.Helper()
-		err := c.Login(context.Background(), tok)
-		if err == nil || strings.Contains(err.Error(), "bad token") || strings.Contains(err.Error(), "CRET") ||
-			!strings.Contains(err.Error(), "not shown") || !strings.Contains(err.Error(), "glab auth login --hostname gitlab.example.edu") {
-			t.Errorf("%s: %v", name, err)
-		}
-	}
-	t.Setenv("FAIL", "1")
-	check("failed login", secret)
-	for _, tok := range []string{"glpat-a\x1b[31mSECRET", "glpat-a\nSECRET", "glpat-\u202eSECRET", "glpat-a\x07SE\tCRET"} {
-		check(strconv.Quote(tok), tok)
-	}
-	t.Setenv("FAIL", "")
-	t.Setenv("WRAP", "1")
-	check("wrapped token", secret)
-	t.Setenv("WRAPAT", "2")
-	check("short wrapped token", "pat42")
-}
-
 // A glab that never stops writing is killed once it passes MaxOutput, and
 // the call fails saying so; it neither buffers on nor blocks. Output
 // under the cap is read as before.
@@ -609,7 +554,7 @@ func TestAPIRefusesOversizedOutput(t *testing.T) {
 	}
 }
 
-// The setup calls (Version, AuthStatus, Login) cap glab's output as API
+// The setup calls (Version and AuthStatus) cap glab's output as API
 // does: a glab that writes without bound is killed and the call fails
 // with ErrTooLarge instead of buffering on.
 func TestSetupCallsRefuseOversizedOutput(t *testing.T) {
@@ -629,9 +574,6 @@ func TestSetupCallsRefuseOversizedOutput(t *testing.T) {
 	}
 	if _, err := c.AuthStatus(ctx); !errors.Is(err, ErrTooLarge) {
 		t.Errorf("AuthStatus: want ErrTooLarge, got %v", err)
-	}
-	if err := c.Login(ctx, "glpat-SECRETvalue"); !errors.Is(err, ErrTooLarge) || strings.Contains(err.Error(), "SECRET") {
-		t.Errorf("Login: want ErrTooLarge without the token, got %v", err)
 	}
 	if took := time.Since(start); took > 5*time.Second {
 		t.Errorf("calls took %s; glab must be killed, not read on", took)

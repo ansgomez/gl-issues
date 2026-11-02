@@ -2,30 +2,48 @@ package config
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 )
+
+// TestMain keeps the tests away from the real config directory and from
+// the environment's GL_ISSUES_… variables.
+func TestMain(m *testing.M) {
+	home, err := os.MkdirTemp("", "gl-issues-config-test-")
+	if err != nil {
+		panic(err)
+	}
+	os.Setenv("HOME", home)
+	os.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	for _, kv := range os.Environ() {
+		name, _, _ := strings.Cut(kv, "=")
+		if strings.HasPrefix(name, EnvPrefix) {
+			os.Unsetenv(name)
+		}
+	}
+	code := m.Run()
+	os.RemoveAll(home)
+	os.Exit(code)
+}
 
 func TestParse(t *testing.T) {
 	kv, err := parse(strings.NewReader(`
 # comment
 host  = "git.example.org"   # trailing comment
 Group = "team/sub"
-token = "glpat-a\"b#c"   # ignored, see TestTokenIgnored
-bare = value # note
+browser = "open \"%s\" #1"
+notify = false # note
 editor = 'C:\no\escapes "here"' # literal string
-empty = ""
+filter = ""
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"host": "git.example.org", "group": "team/sub", "bare": "value",
-		"editor": `C:\no\escapes "here"`, "empty": ""}
+	want := map[string]string{"host": "git.example.org", "group": "team/sub", "browser": `open "%s" #1`,
+		"notify": "false", "editor": `C:\no\escapes "here"`, "filter": ""}
 	for k, v := range want {
 		if kv.values[k] != v {
 			t.Errorf("%s = %q, want %q", k, kv.values[k], v)
@@ -201,66 +219,6 @@ func TestExampleConfigParses(t *testing.T) {
 	}
 }
 
-// A token line left from older versions loads: the value is ignored,
-// never kept or shown, and FileToken says it is there (an empty one is
-// left alone). The old token variables are not read, only warned about.
-func TestTokenIgnored(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "c.toml")
-	os.WriteFile(p, []byte("token = \"glpat-file\"\nview = \"compact\"\n"), 0o600)
-	t.Setenv("GL_ISSUES_TOKEN", "glpat-env")
-	t.Setenv("GITISSUE_TOKEN", "glpat-old")
-	c, err := Load(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !c.FileToken || c.View != "compact" {
-		t.Errorf("FileToken %v, view %q", c.FileToken, c.View)
-	}
-	for _, e := range c.Entries() {
-		if e.Key == TokenKey || strings.Contains(e.Value, "glpat") {
-			t.Errorf("token in %+v", e)
-		}
-	}
-	if fmt.Sprintf("%+v", c) != strings.NewReplacer("glpat-file", "", "glpat-env", "", "glpat-old", "").Replace(fmt.Sprintf("%+v", c)) {
-		t.Error("the token is kept in Config")
-	}
-	want := []string{
-		"GL_ISSUES_TOKEN is no longer read (ignored): gl-issues uses glab's login; remove it",
-		"GITISSUE_TOKEN is no longer read (ignored): gl-issues uses glab's login; remove it",
-	}
-	if got := RemovedEnv(); !reflect.DeepEqual(got, want) {
-		t.Errorf("RemovedEnv = %q", got)
-	}
-
-	os.WriteFile(p, []byte("token = \"\"\n"), 0o600)
-	if c, err = Load(p); err != nil || c.FileToken {
-		t.Errorf("empty token line: FileToken %v, %v", c.FileToken, err)
-	}
-	if err := c.Set(TokenKey, "x", "flag"); err == nil {
-		t.Error("token is no longer a setting")
-	}
-}
-
-func TestStripToken(t *testing.T) {
-	in := "# my settings\r\nhost = \"gitlab.example.edu\"\n  # token = \"commented\"\n" +
-		"Token = 'glpat-a\"b' # old\ngroup = \"acme\"" // no newline at the end
-	rest, tok, found, err := StripToken([]byte(in))
-	if err != nil || !found || tok != `glpat-a"b` {
-		t.Fatalf("token %q, found %v, %v", tok, found, err)
-	}
-	if want := "# my settings\r\nhost = \"gitlab.example.edu\"\n  # token = \"commented\"\ngroup = \"acme\""; string(rest) != want {
-		t.Errorf("rest %q", rest)
-	}
-	if rest, _, found, err := StripToken([]byte("host = \"h\"\n")); found || err != nil || string(rest) != "host = \"h\"\n" {
-		t.Errorf("no token: %q %v %v", rest, found, err)
-	}
-	for _, bad := range []string{"token = glpat-SECRET oops\n", "token = \"a\"\ntoken = \"glpat-SECRET\"\n"} {
-		if _, _, _, err := StripToken([]byte(bad)); err == nil || strings.Contains(err.Error(), "SECRET") {
-			t.Errorf("%q: %v", bad, err)
-		}
-	}
-}
-
 func TestHostForms(t *testing.T) {
 	for _, tc := range []struct{ in, want string }{
 		{"gitlab.example.edu", "gitlab.example.edu"},
@@ -384,37 +342,41 @@ func TestParseDuplicateAndBOM(t *testing.T) {
 	}
 }
 
-// An old token line never stops loading, whatever is wrong with its
-// value: it is ignored (FileToken), and its text appears nowhere.
-// StripToken, for migrate-token, reports what is wrong without the text.
-func TestSecretNeverInErrors(t *testing.T) {
+// A key that is not a setting, such as token, is an error that names the
+// key and the line but never shows the value, whatever its form.
+func TestUnknownKeyHidesValue(t *testing.T) {
 	for _, line := range []string{
+		`token = "glpat-SECRETabc"`,
+		`token = 'glpat-SECRETabc'`,
 		`token = glpat-SECRETabc junk`,
-		`token = glpat-SECRETabc"`,
 		`token = "glpat-SECRETabc" trailing`,
-		`token = 'glpat-SECRETabc' trailing`,
 		`token = "glpat-SECRETabc\q"`,
-		`token = "x"` + "\ntoken = \"glpat-SECRETabc\"",
 	} {
 		p := filepath.Join(t.TempDir(), "c.toml")
-		if err := os.WriteFile(p, []byte(line+"\n"), 0o600); err != nil {
+		if err := os.WriteFile(p, []byte("host = \"gitlab.example.edu\"\n"+line+"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		c, err := Load(p)
-		if err != nil || !c.FileToken {
-			t.Errorf("%q: must load with FileToken: %v, %v", line, c.FileToken, err)
+		_, err := Load(p)
+		if err == nil || strings.Contains(err.Error(), "SECRET") ||
+			!strings.Contains(err.Error(), `line 2: unknown setting "token"`) {
+			t.Errorf("%q: %v", line, err)
 		}
-		if strings.Contains(fmt.Sprintf("%+v", c), "SECRET") {
-			t.Errorf("%q: token kept in Config", line)
-		}
-		_, _, _, err = StripToken([]byte(line + "\n"))
-		if err == nil {
-			t.Errorf("%q: StripToken: want error", line)
-			continue
-		}
-		if strings.Contains(err.Error(), "SECRET") || !strings.Contains(err.Error(), "token") {
-			t.Errorf("%q: StripToken error: %v", line, err)
-		}
+	}
+}
+
+// GL_ISSUES_CONFIG names the config file unless -config is given.
+func TestConfigEnv(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	if p, explicit, _ := ResolvePath(""); p != filepath.Join(dir, "gl-issues", "config.toml") || explicit {
+		t.Errorf("default: %s %v", p, explicit)
+	}
+	t.Setenv("GL_ISSUES_CONFIG", filepath.Join(dir, "env.toml"))
+	if p, explicit, _ := ResolvePath(""); p != filepath.Join(dir, "env.toml") || !explicit {
+		t.Errorf("GL_ISSUES_CONFIG: %s %v", p, explicit)
+	}
+	if p, _, _ := ResolvePath("flag.toml"); p != "flag.toml" {
+		t.Errorf("-config must win: %s", p)
 	}
 }
 

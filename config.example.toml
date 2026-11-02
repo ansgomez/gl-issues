@@ -11,8 +11,6 @@
 # GL_ISSUES_<SETTING> (e.g. GL_ISSUES_REFRESH=2m), which wins over this
 # file. `gl-issues config` shows the values in effect and where each one
 # comes from. Unknown settings and invalid values are reported at start.
-# The old names from before the rename (GITISSUE_<SETTING>) still work for
-# now, with a warning.
 #
 # Format: one `key = value` per line; values are "strings", 'literal
 # strings' (no backslash escapes), or bare true/false/numbers. Sections
@@ -43,8 +41,6 @@ group = ""
 # comment, assign, set due dates, edit descriptions, close/reopen and
 # create issues; "read_api" is enough to only look. Create one at
 # https://<host>/-/user_settings/personal_access_tokens
-# Older versions kept a `token = "..."` line here. It is ignored now;
-# `gl-issues migrate-token` hands it to glab's login and removes the line.
 
 # --- Refresh --------------------------------------------------------------
 

@@ -31,7 +31,6 @@ type doctorClient interface {
 
 type doctor struct {
 	out      io.Writer
-	notes    []renameNote // left over from the rename of gitissue
 	c        doctorClient
 	timeout  time.Duration
 	problems int
@@ -69,17 +68,14 @@ const networkHint = "check the host name, and whether the host is only reachable
 // runDoctor checks the setup and reports whether there was no problem
 // (warnings are fine). cfg is the loaded config (with flags applied),
 // path the config file it was loaded from or would be, loadErr any error
-// loading it. notes are warnings about the old name (renameNotes).
-func runDoctor(out io.Writer, c doctorClient, cfg config.Config, path string, loadErr error, notes []renameNote) bool {
-	d := &doctor{out: out, c: c, timeout: doctorTimeout, notes: notes}
+// loading it.
+func runDoctor(out io.Writer, c doctorClient, cfg config.Config, path string, loadErr error) bool {
+	d := &doctor{out: out, c: c, timeout: doctorTimeout}
 	d.run(cfg, path, loadErr)
 	return d.problems == 0
 }
 
 func (d *doctor) run(cfg config.Config, path string, loadErr error) {
-	for _, n := range d.notes {
-		d.report(markWarn, n.text, n.hint)
-	}
 	switch {
 	case loadErr != nil:
 		// `gl-issues config` would fail the same way, so no hint at it.
@@ -92,10 +88,6 @@ func (d *doctor) run(cfg config.Config, path string, loadErr error) {
 			"create it with `gl-issues init`")
 	default:
 		d.report(markOK, "config: "+cfg.Path, "")
-	}
-	if cfg.FileToken {
-		d.report(markWarn, "config: the token in "+cfg.Path+" is ignored (gl-issues uses glab's login)",
-			"hand it to glab and remove it from the file: gl-issues migrate-token")
 	}
 	if cfg.Host == "" {
 		d.report(markProblem, "host: not set", "set host in "+path+" (bare host name, optional :port), or pass -host")
@@ -111,9 +103,6 @@ func (d *doctor) run(cfg config.Config, path string, loadErr error) {
 	}
 
 	loginHint := "run " + gl.LoginCommand(cfg.Host)
-	if cfg.FileToken {
-		loginHint = "run gl-issues migrate-token (hands the token in " + cfg.Path + " to glab), or " + gl.LoginCommand(cfg.Host)
-	}
 	ctx, cancel := d.ctx()
 	me, err := d.c.Me(ctx)
 	cancel()

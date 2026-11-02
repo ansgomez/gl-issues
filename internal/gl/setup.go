@@ -162,40 +162,6 @@ func parseAuthStatus(out, host string) AuthStatus {
 	return st
 }
 
-// Login stores token as glab's login for the host: `glab auth login
-// --hostname <host> --stdin`, token on stdin only, never an argument or
-// in the environment. glab keeps it in the OS keyring unless configured
-// otherwise. The error never holds the token.
-func (c Client) Login(ctx context.Context, token string) error {
-	kctx, kill := context.WithCancel(ctx)
-	defer kill()
-	cmd := exec.CommandContext(kctx, "glab", "auth", "login", "--hostname", c.Host, "--stdin")
-	cmd.Env = glabEnv(os.Environ(), c.Host)
-	cmd.Stdin = strings.NewReader(token + "\n")
-	cmd.WaitDelay = waitDelay
-	// Nothing of the output is used (see below), but it is still capped.
-	out := &cappedWriter{limit: MaxOutput, kill: kill}
-	cmd.Stdout, cmd.Stderr = out, out
-	err := cmd.Run()
-	if errors.Is(err, exec.ErrWaitDelay) {
-		err = nil
-	}
-	switch {
-	case out.over:
-		return fmt.Errorf("glab auth login: %w", ErrTooLarge)
-	case err == nil:
-		return nil
-	case errors.Is(err, exec.ErrNotFound):
-		return ErrNoGlab
-	case ctx.Err() != nil:
-		return fmt.Errorf("glab auth login: %w", ctx.Err())
-	}
-	// None of glab's output is shown: it may echo the token in a shape no
-	// redaction can match. glab's own login shows the reason.
-	return fmt.Errorf("glab auth login failed (%v); glab's output is not shown, as it may contain the token; "+
-		"run %s yourself to see why", err, LoginCommand(c.Host))
-}
-
 // Group fetches a group by its full path.
 func (c Client) Group(ctx context.Context, path string) (Group, error) {
 	var g Group

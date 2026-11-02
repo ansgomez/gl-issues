@@ -19,14 +19,10 @@ unless you prefer otherwise.
 gl-issues runs `glab api`, which uses glab's own login (kept in the OS
 keyring by glab 1.123+ by default; `gl-issues doctor` reports where), and
 prints text written by other GitLab users in your
-terminal. gl-issues holds no token; `gl-issues migrate-token` hands a token
-left in an old config file to `glab auth login --stdin` once. Particularly
-relevant:
+terminal. gl-issues holds no token. Particularly relevant:
 
 - a token reaching anything but glab (command lines, environment, output,
-  logs, files), or being sent to another host; `migrate-token` passing it
-  other than on glab's standard input, or changing the config file when
-  glab refused it,
+  logs, files), or being sent to another host,
 - `gl-issues doctor` printing anything of `glab auth status` beyond where
   the token is kept and the API protocol,
 - text from GitLab that could reach the terminal unsanitized (escape

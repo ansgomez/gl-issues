@@ -104,15 +104,15 @@ func TestSeenFile(t *testing.T) {
 	}
 }
 
-func TestLegacyDir(t *testing.T) {
+func TestDir(t *testing.T) {
 	d := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", d)
-	if Dir() != filepath.Join(d, "gl-issues") || LegacyDir() != filepath.Join(d, "gitissue") {
-		t.Errorf("%s %s", Dir(), LegacyDir())
+	if Dir() != filepath.Join(d, "gl-issues") {
+		t.Errorf("%s", Dir())
 	}
 	t.Setenv("XDG_STATE_HOME", "relative")
 	t.Setenv("HOME", d)
-	if LegacyDir() != filepath.Join(d, ".local", "state", "gitissue") {
-		t.Errorf("%s", LegacyDir())
+	if Dir() != filepath.Join(d, ".local", "state", "gl-issues") {
+		t.Errorf("%s", Dir())
 	}
 }

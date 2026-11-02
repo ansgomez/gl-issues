@@ -12,11 +12,8 @@ host and group, glab and its version, the login (user name), where glab
 keeps the token (OS keyring, or a warning for plain text in glab's config
 file) and whether API calls use https, that the group exists and is
 visible to you, and the token's scopes. Only those facts are taken from
-`glab auth status`; no token text is ever printed. It also warns about a
-`token` left in the config file, `GL_ISSUES_TOKEN`/`GITISSUE_TOKEN` still
-set, and `GITISSUE_…` variables and directories left over from the old
-name. It
-exits 1 if anything is `✗`. Then the commands that print plain errors
+`glab auth status`; no token text is ever printed. It exits 1 if
+anything is `✗`. Then the commands that print plain errors
 instead of a status line:
 
 ```sh
@@ -39,9 +36,7 @@ gl-issues list                                   # the full error of the first r
   `glab auth status --hostname <host>`; if it is not logged in, run
   `glab auth login --hostname <host>` (for a host with a port, see
   [Log in](configuration.md#log-in-and-token-scopes)). Logged in to `gitlab.com` or
-  another host does not count: the host string must match `host`. If
-  your config file still has a `token` line from an older version,
-  `gl-issues migrate-token` logs glab in with it.
+  another host does not count: the host string must match `host`.
 - **`the token needs the api scope` (`insufficient_scope`).** Viewing works
   but a comment, assignment, due date, description, close/reopen or new
   issue fails: the token has only `read_api` (or `read_user`, …). Create a
@@ -73,10 +68,6 @@ gl-issues list                                   # the full error of the first r
 - **The dashboard is empty.** The group has no issues in the current
   list: press `t` to show closed or all issues, `esc` to clear filters,
   or check `filter` and `state` in `gl-issues config`.
-- **`moved your settings from … (gitissue was renamed)`,
-  `ignoring …: using …`, `GITISSUE_… is deprecated: use GL_ISSUES_…`.**
-  Left over from the old name; see
-  [Upgrading from gitissue](configuration.md#upgrading-from-gitissue).
 - **Slow start on big groups.** All matching issues are fetched (100 per
   request). Use a narrower group with `-g`.
 - **`response too large (over 128 MB; …)`.** glab wrote more than

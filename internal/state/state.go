@@ -19,21 +19,15 @@ var ErrNoDir = errors.New("no state directory: set $HOME or $XDG_STATE_HOME")
 
 // Dir returns the state directory, or "" if there is none. A relative
 // $XDG_STATE_HOME is ignored, as the XDG spec requires.
-func Dir() string { return dirFor("gl-issues") }
-
-// LegacyDir returns the state directory of gitissue, the tool's old name,
-// by the same rules as Dir; main moves it to Dir once.
-func LegacyDir() string { return dirFor("gitissue") }
-
-func dirFor(name string) string {
+func Dir() string {
 	if d := os.Getenv("XDG_STATE_HOME"); d != "" && filepath.IsAbs(d) {
-		return filepath.Join(d, name)
+		return filepath.Join(d, "gl-issues")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || !filepath.IsAbs(home) {
 		return ""
 	}
-	return filepath.Join(home, ".local", "state", name)
+	return filepath.Join(home, ".local", "state", "gl-issues")
 }
 
 type file struct {

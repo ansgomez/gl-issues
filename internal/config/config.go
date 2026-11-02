@@ -8,7 +8,6 @@ package config
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -30,12 +29,6 @@ type Config struct {
 	Group string // full group path, e.g. "team/sub"
 	Path  string // file the config was read from; "" if none
 
-	// FileToken is set when the file still has a non-empty token line,
-	// from before gl-issues left the token to glab. The value is ignored,
-	// not even validated, and never kept here; `gl-issues migrate-token`
-	// hands it to glab (and reports a malformed one).
-	FileToken bool
-
 	Refresh      time.Duration // issue list reload interval; 0 = off
 	RefreshLists time.Duration // members and projects reload interval; 0 = off
 	Notify       bool          // tag and report changes since you last saw them
@@ -51,8 +44,7 @@ type Config struct {
 	Theme        string        // "auto", "light" or "dark"
 
 	// Source records where each setting's value came from: "default",
-	// the config file path, "env GL_ISSUES_…" (or "env GITISSUE_…", the
-	// deprecated name) or "flag -…".
+	// the config file path, "env GL_ISSUES_…" or "flag -…".
 	Source map[string]string
 
 	groupHost string // host of a group given as a URL, checked against Host
@@ -66,11 +58,6 @@ type setting struct {
 	key, def, help string
 	apply          func(c *Config, v string) error
 }
-
-// TokenKey is the setting older versions kept the token in. Load skips
-// it (see Config.FileToken), and its value is treated as a secret: never
-// shown, not even in an error.
-const TokenKey = "token"
 
 // Settings lists every key the config file understands, in the order
 // `gl-issues config` prints them. Each can also be set with the
@@ -263,11 +250,7 @@ func lookup(key string) *setting {
 func (c *Config) Set(key, value, source string) error {
 	s := lookup(key)
 	if s == nil {
-		var keys []string
-		for _, s := range settings {
-			keys = append(keys, s.key)
-		}
-		return fmt.Errorf("unknown setting %q (known: %s)", key, strings.Join(keys, ", "))
+		return unknownSetting(key)
 	}
 	if err := s.apply(c, value); err != nil {
 		return fmt.Errorf("%s = %q: %w", key, gl.RedactUserinfo(value), err)
@@ -277,6 +260,16 @@ func (c *Config) Set(key, value, source string) error {
 	}
 	c.Source[key] = source
 	return nil
+}
+
+// unknownSetting is the error for a key that is not a setting. It never
+// includes a value.
+func unknownSetting(key string) error {
+	var keys []string
+	for _, s := range settings {
+		keys = append(keys, s.key)
+	}
+	return fmt.Errorf("unknown setting %q (known: %s)", key, strings.Join(keys, ", "))
 }
 
 // Defaults returns a Config with every default applied.
@@ -332,33 +325,16 @@ var ErrNoConfigDir = errors.New("no config directory: HOME is not set and XDG_CO
 	"pass -config or set GL_ISSUES_CONFIG")
 
 // Name is the directory name under the config (and state) base
-// directory. LegacyName is the tool's name before it was renamed: its
-// directories are moved over once (see main's migrateLegacy), and its
-// environment variables still work for one release, with a warning.
+// directory.
 const (
-	Name       = "gl-issues"
-	LegacyName = "gitissue"
-
-	EnvPrefix       = "GL_ISSUES_"
-	LegacyEnvPrefix = "GITISSUE_"
+	Name      = "gl-issues"
+	EnvPrefix = "GL_ISSUES_"
 )
 
 // DefaultPath returns ~/.config/gl-issues/config.toml, or
 // $XDG_CONFIG_HOME/gl-issues/config.toml when that is an absolute path (a
 // relative one is ignored, as the XDG spec says).
 func DefaultPath() (string, error) {
-	dir, err := dirFor(Name)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "config.toml"), nil
-}
-
-// LegacyDir returns the default config directory of gitissue, the old
-// name, by the same rules as DefaultPath.
-func LegacyDir() (string, error) { return dirFor(LegacyName) }
-
-func dirFor(name string) (string, error) {
 	dir := os.Getenv("XDG_CONFIG_HOME")
 	if !filepath.IsAbs(dir) {
 		home, err := os.UserHomeDir()
@@ -367,63 +343,18 @@ func dirFor(name string) (string, error) {
 		}
 		dir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(dir, name), nil
+	return filepath.Join(dir, Name, "config.toml"), nil
 }
 
-// lookupEnv reads the environment variable GL_ISSUES_<key>, or, while
-// that is not set at all, the deprecated GITISSUE_<key>. name is the
+// lookupEnv reads the environment variable GL_ISSUES_<key>. name is the
 // variable that was read.
 func lookupEnv(key string) (name, value string) {
-	key = strings.ToUpper(key)
-	if v, ok := os.LookupEnv(EnvPrefix + key); ok {
-		return EnvPrefix + key, v
-	}
-	if v, ok := os.LookupEnv(LegacyEnvPrefix + key); ok {
-		return LegacyEnvPrefix + key, v
-	}
-	return EnvPrefix + key, ""
-}
-
-// DeprecatedEnv returns one warning for each deprecated GITISSUE_…
-// variable that is set (the config file and every setting). Only names
-// are given, never values.
-func DeprecatedEnv() []string {
-	keys := []string{"config"}
-	for _, s := range settings {
-		keys = append(keys, s.key)
-	}
-	var out []string
-	for _, k := range keys {
-		k = strings.ToUpper(k)
-		oldName, newName := LegacyEnvPrefix+k, EnvPrefix+k
-		if _, ok := os.LookupEnv(oldName); !ok {
-			continue
-		}
-		msg := oldName + " is deprecated: use " + newName
-		if _, ok := os.LookupEnv(newName); ok {
-			msg += " (ignored: " + newName + " is set)"
-		}
-		out = append(out, msg)
-	}
-	return out
-}
-
-// RemovedEnv returns one warning for each token variable of older
-// versions that is set: GL_ISSUES_TOKEN and GITISSUE_TOKEN are no longer
-// read. Only names are given, never values.
-func RemovedEnv() []string {
-	var out []string
-	for _, name := range []string{EnvPrefix + "TOKEN", LegacyEnvPrefix + "TOKEN"} {
-		if _, ok := os.LookupEnv(name); ok {
-			out = append(out, name+" is no longer read (ignored): gl-issues uses glab's login; remove it")
-		}
-	}
-	return out
+	name = EnvPrefix + strings.ToUpper(key)
+	return name, os.Getenv(name)
 }
 
 // ResolvePath returns the config file gl-issues uses: path (the -config
-// flag) if set, else $GL_ISSUES_CONFIG (or the deprecated
-// $GITISSUE_CONFIG while that is unset), else DefaultPath. explicit is
+// flag) if set, else $GL_ISSUES_CONFIG, else DefaultPath. explicit is
 // false for the default path, which may be missing.
 func ResolvePath(path string) (resolved string, explicit bool, err error) {
 	if path != "" {
@@ -439,10 +370,8 @@ func ResolvePath(path string) (resolved string, explicit bool, err error) {
 // Load reads the config from path. If path is empty it uses
 // $GL_ISSUES_CONFIG, then DefaultPath. A missing file is not an error when
 // path was not given explicitly. Environment variables GL_ISSUES_<KEY>
-// (or the deprecated GITISSUE_<KEY> while the new one is unset) override
-// file values; unknown keys and invalid values are errors. An empty
-// variable is ignored. A token line left from older versions is skipped
-// (see Config.FileToken).
+// override file values; unknown keys and invalid values are errors. An
+// empty variable is ignored.
 func Load(path string) (Config, error) {
 	c := Defaults()
 	path, explicit, err := ResolvePath(path)
@@ -466,24 +395,12 @@ func Load(path string) (Config, error) {
 	return c, c.applyEnv()
 }
 
-// LoadData is Load for contents already read from the file at path, so a
-// caller can act on exactly the bytes it holds. It does not check the
-// file's permissions: load path with Load first.
-func LoadData(path string, data []byte) (Config, error) {
-	c := Defaults()
-	if err := c.loadFile(bytes.NewReader(data), path); err != nil {
-		return c, err
-	}
-	return c, c.applyEnv()
-}
-
 // loadFile sets the values of the config file read from r.
 func (c *Config) loadFile(r io.Reader, path string) error {
 	kv, err := parse(r)
 	if err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	c.FileToken = kv.token
 	for _, k := range kv.order {
 		if err := c.Set(k, kv.values[k], path); err != nil {
 			return fmt.Errorf("%s: %w", path, err)
@@ -506,8 +423,7 @@ func (c *Config) applyEnv() error {
 	return nil
 }
 
-// checkPerms refuses a config file that others can read: it may still
-// hold a token from older versions.
+// checkPerms refuses a config file that others can read.
 func checkPerms(f *os.File, path string) error {
 	fi, err := f.Stat()
 	if err != nil {
@@ -523,7 +439,6 @@ func checkPerms(f *os.File, path string) error {
 type keyValues struct {
 	values map[string]string
 	order  []string // keys in file order
-	token  bool     // a token line with a value, even a malformed one (see Config.FileToken)
 }
 
 // parse reads the TOML subset gl-issues understands: blank lines, `#`
@@ -556,12 +471,10 @@ func parse(r io.Reader) (keyValues, error) {
 			return kv, fmt.Errorf("line %d: bad setting name %q", n, k)
 		}
 		k = strings.ToLower(k)
-		if k == TokenKey { // ignored whatever its value, never echoed; migrate-token reports a bad one
-			val, err := parseValue(v, true)
-			kv.token = kv.token || err != nil || val != ""
-			continue
+		if lookup(k) == nil { // before the value, so its text is never in the error
+			return kv, fmt.Errorf("line %d: %w", n, unknownSetting(k))
 		}
-		v, err := parseValue(v, false)
+		v, err := parseValue(v)
 		if err != nil {
 			return kv, fmt.Errorf("line %d: %s: %w", n, k, err)
 		}
@@ -591,12 +504,8 @@ func validKey(k string) bool {
 }
 
 // parseValue decodes the right-hand side of a line, including an optional
-// trailing comment. For a secret, errors never include any of the text.
-func parseValue(v string, secret bool) (string, error) {
-	show := strconv.Quote
-	if secret {
-		show = func(string) string { return "(not shown)" }
-	}
+// trailing comment.
+func parseValue(v string) (string, error) {
 	var val, rest string
 	switch {
 	case strings.HasPrefix(v, `"""`) || strings.HasPrefix(v, "'''"):
@@ -608,7 +517,7 @@ func parseValue(v string, secret bool) (string, error) {
 		}
 		s, err := strconv.Unquote(v[:end+1])
 		if err != nil {
-			return "", fmt.Errorf("bad escape in string %s (use 'single quotes' for backslashes)", show(v[:end+1]))
+			return "", fmt.Errorf("bad escape in string %s (use 'single quotes' for backslashes)", strconv.Quote(v[:end+1]))
 		}
 		val, rest = s, v[end+1:]
 	case strings.HasPrefix(v, "'"): // literal string: no escapes
@@ -627,42 +536,13 @@ func parseValue(v string, secret bool) (string, error) {
 			rest = "#" + rest
 		}
 		if strings.ContainsAny(val, "\"'") || strings.ContainsAny(val, " \t") {
-			return "", fmt.Errorf("bad value %s (quote text: \"…\")", show(val))
+			return "", fmt.Errorf("bad value %s (quote text: \"…\")", strconv.Quote(val))
 		}
 	}
 	if rest = strings.TrimSpace(rest); rest != "" && !strings.HasPrefix(rest, "#") {
-		return "", fmt.Errorf("unexpected %s after the value", show(rest))
+		return "", fmt.Errorf("unexpected %s after the value", strconv.Quote(rest))
 	}
 	return val, nil
-}
-
-// StripToken returns data, the text of a config file, without its token
-// line, and that line's value. found is false when there is no token
-// line; rest is then data unchanged. Every other byte is kept as it was.
-// Errors never include the token.
-func StripToken(data []byte) (rest []byte, token string, found bool, err error) {
-	for n, line := range bytes.SplitAfter(data, []byte("\n")) {
-		t := string(line)
-		if n == 0 {
-			t = strings.TrimPrefix(t, "\uFEFF")
-		}
-		k, v, ok := strings.Cut(strings.TrimSpace(t), "=")
-		if !ok || strings.HasPrefix(strings.TrimSpace(t), "#") || !strings.EqualFold(strings.TrimSpace(k), TokenKey) {
-			rest = append(rest, line...)
-			continue
-		}
-		if found {
-			return data, "", false, fmt.Errorf("line %d: %s is set twice; keep one", n+1, TokenKey)
-		}
-		if token, err = parseValue(strings.TrimSpace(v), true); err != nil {
-			return data, "", false, fmt.Errorf("line %d: %s: %w", n+1, TokenKey, err)
-		}
-		found = true
-	}
-	if !found {
-		return data, "", false, nil
-	}
-	return rest, token, true, nil
 }
 
 // closingQuote returns the index of the quote that ends the string

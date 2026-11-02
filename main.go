@@ -32,7 +32,6 @@ const usage = `Usage:
   gl-issues [flags] init                     create the config file from the template
   gl-issues [flags] doctor                   check config, glab, login, token storage, group and token scopes
   gl-issues [flags] config                   show all settings and where they come from
-  gl-issues [flags] migrate-token            hand a token left in the config file to glab's login
   gl-issues [flags] list     [-mine] [-overdue] [-state opened|closed|all]
   gl-issues [flags] show     <ref>
   gl-issues [flags] comment  <ref> <text|->    ("-" reads stdin)
@@ -93,21 +92,13 @@ func main() {
 		return
 	}
 
-	path, explicit, err := config.ResolvePath(cfgPath)
-	// gitissue was renamed: move its default directories over once, and
-	// warn about its old variables (doctor only reports both).
-	migrateLegacyFor(flag.Arg(0), os.Stderr, legacyDirs(explicit))
-	if flag.Arg(0) != "doctor" {
-		for _, w := range append(config.DeprecatedEnv(), config.RemovedEnv()...) {
-			fmt.Fprintln(os.Stderr, "gl-issues:", w)
-		}
-	}
+	path, _, err := config.ResolvePath(cfgPath)
 	if err != nil {
 		fatal(err)
 	}
 	flags := map[string]string{"group": group, "host": host, "refresh": refresh, "view": view, "tree_depth": tree}
 	switch flag.Arg(0) {
-	case "init", "doctor", "config", "migrate-token": // these work without a (valid) config, show it or fix it
+	case "init", "doctor", "config": // these work without a (valid) config, or show it
 		if err := setupCommand(flag.Arg(0), flag.Args()[1:], cfgPath, path, flags, os.Stdout); err != nil {
 			fatal(err)
 		}
@@ -117,9 +108,6 @@ func main() {
 	cfg, err := loadConfig(cfgPath, flags)
 	if err != nil {
 		fatal(err)
-	}
-	if w := tokenWarning(cfg); w != "" {
-		fmt.Fprintln(os.Stderr, "gl-issues:", w)
 	}
 	if hostMissing(cfg.Host, flag.Args()) {
 		// Without a host glab silently falls back to gitlab.com.
@@ -641,10 +629,6 @@ func printConfig(out io.Writer, cfg config.Config, path string) {
 	_ = w.Flush()
 	fmt.Fprintln(out, "\nSet any of these in the config file, or as GL_ISSUES_<SETTING> in the environment.")
 	fmt.Fprintln(out, "The login is glab's: glab auth login --hostname <host> (glab 1.123+ keeps the token in the OS keyring; gl-issues doctor says where it is).")
-	if cfg.FileToken {
-		fmt.Fprintln(out, "Warning: the token in the config file is ignored (gl-issues uses glab's login now); "+
-			"move it to glab's login with: gl-issues migrate-token")
-	}
 }
 
 func (a *cli) newIssue(projectArg, title, due, who, desc string) error {

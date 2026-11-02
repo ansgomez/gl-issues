@@ -280,13 +280,9 @@ func SameHost(u *url.URL, host string) bool {
 	return strings.EqualFold(u.Host, host) || strings.EqualFold(u.Hostname(), host)
 }
 
-// tokenVars are the environment variables glab reads a token from, and
-// those of older gl-issues versions (no longer read). None reaches any
-// program gl-issues runs: see glabEnv and WithoutTokens.
-var tokenVars = []string{
-	"GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN", "CI_JOB_TOKEN",
-	"GL_ISSUES_TOKEN", "GITISSUE_TOKEN",
-}
+// tokenVars are the environment variables glab reads a token from. None
+// reaches any program gl-issues runs: see glabEnv and WithoutTokens.
+var tokenVars = []string{"GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN", "CI_JOB_TOKEN"}
 
 // droppedVars are other inherited variables that change which host glab
 // talks to, how it logs in, or make it print debug output (which can
