@@ -2,7 +2,7 @@ module gl-issues
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.27.3
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
