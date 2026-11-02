@@ -1,0 +1,11 @@
+/gl-issues
+/dist/
+coverage.out
+coverage.xml
+
+# Local configuration and secrets: never commit these.
+config.toml
+*.local.toml
+.env*
+*.token
+.DS_Store

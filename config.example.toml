@@ -1,0 +1,118 @@
+# gl-issues configuration
+#
+# Copy to ~/.config/gl-issues/config.toml (or $XDG_CONFIG_HOME/gl-issues/
+# if that is set to an absolute path; `gl-issues init` does it for you), then restrict it:
+#   chmod 600 ~/.config/gl-issues/config.toml
+# At least set host and group below.
+# gl-issues refuses to read the file if other users can read it.
+# Never commit the real file; config.toml is in .gitignore.
+#
+# Every setting can also be given as an environment variable
+# GL_ISSUES_<SETTING> (e.g. GL_ISSUES_REFRESH=2m), which wins over this
+# file. `gl-issues config` shows the values in effect and where each one
+# comes from. Unknown settings and invalid values are reported at start.
+# The old names from before the rename (GITISSUE_<SETTING>) still work for
+# now, with a warning.
+#
+# Format: one `key = value` per line; values are "strings", 'literal
+# strings' (no backslash escapes), or bare true/false/numbers. Sections
+# ([...]) are not supported.
+
+# --- Connection -----------------------------------------------------------
+
+# GitLab host: a bare host name, optionally with a port, no path. A
+# leading https:// is dropped; http:// is refused. Use the same host as
+# in `glab auth login --hostname <host>`.
+# Examples:
+#   host = "gitlab.example.com"
+#   host = "gitlab.example.com:8443"
+host = ""
+
+# Full path of the group whose issues are shown (subgroups included), as
+# in its URL; the whole URL is accepted too. Override per run with -g,
+# e.g. `gl-issues -g acme/other`. Examples:
+#   group = "acme/platform"
+#   group = "https://gitlab.example.com/acme/platform"
+group = ""
+
+# Login: gl-issues holds no token. It uses glab's stored login for host,
+# which glab 1.123+ keeps in the OS keyring (Secret Service, macOS
+# Keychain) by default; `gl-issues doctor` says where yours is:
+#   glab auth login --hostname <host>
+# With a personal access token (legacy, scope-based): "api" is needed to
+# comment, assign, set due dates, edit descriptions, close/reopen and
+# create issues; "read_api" is enough to only look. Create one at
+# https://<host>/-/user_settings/personal_access_tokens
+# Older versions kept a `token = "..."` line here. It is ignored now;
+# `gl-issues migrate-token` hands it to glab's login and removes the line.
+
+# --- Refresh --------------------------------------------------------------
+
+# Reload the issue list in the background this often, to pick up issues
+# others add or change. A duration like 30s, 2m, 1h (minimum 30s), or off.
+# Also: -refresh flag.
+refresh = "5m"
+
+# Reload group members (for assigning) and projects (for new issues).
+refresh_lists = "1h"
+
+# Tag issues "new"/"updated" since you last saw them and say what changed
+# ("since last time: 1 new issue · 3 updated"). Remembered across restarts
+# in a private seen file under ~/.local/state/gl-issues/ (one per host and
+# group). Changes you made yourself, here or elsewhere, are not tagged:
+# for each changed issue gl-issues reads its newest note (read_api is
+# enough; at most 4 at a time, 50 per reload). false = no tags, no seen
+# file, no extra requests.
+notify = true
+
+# With each reload, fetch your pending GitLab To-Dos on issues in the group
+# (one request per 100 To-Dos, at most 10; read_api is enough; nothing is
+# ever marked done). The title shows "To-Do N" ("To-Do 1000+" past the
+# last page) and listed issues get a "todo" tag. false = no request.
+todos = true
+
+# --- What you see at start ------------------------------------------------
+
+# Sort: due (soonest first), updated (latest first) or project.
+sort = "due"
+
+# Issues to list: opened, closed or all.
+state = "opened"
+
+# cards: two lines per issue; compact: one line with columns. Also: -view.
+view = "cards"
+
+# Filter on start: mine, unassigned, due-soon, or "" for none.
+filter = ""
+
+# Issues due within this many days are "due soon" (yellow, `o` filter).
+due_soon_days = 7
+
+# Layout: 0 = flat list; 1 = a tree with one label per subgroup of the
+# group (deeper subgroups roll up into it); 2 = also their subgroups.
+# In the tree, child items (tasks, child issues) are nested under their
+# parent issue (one extra GraphQL request per 100 work items with each
+# load, at most 50; read_api is enough).
+# The tree is the default and starts folded (f unfolds one label, b all;
+# a single top-level label starts unfolded). `l` cycles flat -> 1 -> 2 in
+# the dashboard. Also: -tree.
+tree_depth = 1
+
+# --- Programs -------------------------------------------------------------
+
+# Editor for descriptions and long comments. Empty = $VISUAL, then
+# $EDITOR, then vi/nano. Editors that return at once need a wait flag,
+# e.g. "code -w".
+editor = ""
+
+# Command that opens issue URLs (`w`). Empty = `open` on macOS; on Linux
+# the first that works of $BROWSER, xdg-open, wslview (WSL) and
+# sensible-browser. May include flags, e.g. "firefox --new-window".
+browser = ""
+
+# --- Look -----------------------------------------------------------------
+
+# Terminal background, for the band behind the row under the cursor:
+# auto asks the terminal; light or dark skips the question. Set it when
+# a multiplexer (Zellij, some tmux setups) reports the wrong colour.
+theme = "auto"

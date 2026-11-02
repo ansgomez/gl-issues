@@ -1,0 +1,30 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. gl-issues -g acme\n2. press …"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version (gl-issues -version)
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS, terminal, glab version
+  - type: markdown
+    attributes:
+      value: Please remove private hosts, group and project paths, usernames and tokens from logs. Report security problems privately (see SECURITY.md), not here.
