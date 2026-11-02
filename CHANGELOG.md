@@ -6,6 +6,8 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-02
+
 ### Removed
 
 - Migration code and the `migrate-token` subcommand for pre-release
@@ -57,5 +59,6 @@ First public release.
 - Release builds for Linux and macOS (amd64, arm64), `.deb` and `.rpm`
   packages, SBOMs and keyless-signed checksums.
 
-[Unreleased]: https://github.com/ansgomez/gl-issues/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ansgomez/gl-issues/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/ansgomez/gl-issues/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ansgomez/gl-issues/releases/tag/v0.1.0
